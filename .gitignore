@@ -45,3 +45,6 @@ next-env.d.ts
 
 # config local del editor
 /.claude
+
+.vercel
+.env*

@@ -1,5 +1,7 @@
 # Baby Burger — Sistema de gestión
 
+**En producción:** https://baby-burger-sistema.vercel.app · Base de datos: Supabase (proyecto `baby-burger`, São Paulo) · Publicar cambios: `npx vercel --prod`
+
 Sistema a medida para la operación de Baby Burger: pedidos, recetas, costos, inventario, empaques, compras, gastos, caja, retiros y rentabilidad, todo conectado.
 
 Las reglas de negocio que gobiernan el diseño están en [docs/REGLAS.md](docs/REGLAS.md). Léelas antes de tocar cualquier módulo.
