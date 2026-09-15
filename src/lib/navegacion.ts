@@ -12,9 +12,9 @@ export type ItemNav = {
 
 export const NAVEGACION: ItemNav[] = [
   { href: "/", etiqueta: "Inicio", icono: "🏠", enMovil: true },
-  { href: "/pedidos", etiqueta: "Pedidos", icono: "🧾", permiso: "pedidos.ver", fase: 4, enMovil: true },
-  { href: "/cocina", etiqueta: "Cocina", icono: "🔥", permiso: "cocina.ver", fase: 4 },
-  { href: "/caja", etiqueta: "Caja", icono: "💵", permiso: "caja.ver", fase: 4, enMovil: true },
+  { href: "/pedidos", etiqueta: "Pedidos", icono: "🧾", permiso: "pedidos.ver", enMovil: true },
+  { href: "/cocina", etiqueta: "Cocina", icono: "🔥", permiso: "cocina.ver" },
+  { href: "/caja", etiqueta: "Caja", icono: "💵", permiso: "caja.ver", enMovil: true },
   { href: "/insumos", etiqueta: "Ingredientes", icono: "🥩", permiso: "insumos.ver" },
   { href: "/recetas", etiqueta: "Recetas y costos", icono: "📋", permiso: "recetas.ver" },
   { href: "/preparaciones", etiqueta: "Preparaciones", icono: "🥣", permiso: "recetas.ver" },
