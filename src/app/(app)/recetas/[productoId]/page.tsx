@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requerirPermiso } from "@/lib/auth/session";
 import { calcularMetricas, costearItems, obtenerCostosVigentes, obtenerParametrosMargen, INCLUDE_ITEM_COSTEABLE } from "@/lib/costeo/costeo";
 import { opcionesSelector, valorSelector } from "@/lib/costeo/items";
+import { TIPOS_SERVICIO, costearReglas, empaquesPorItem, empaquesPorPedido, obtenerReglasEmpaque } from "@/lib/costeo/empaques";
 import { fmtFechaHora, fmtPct, fmtSoles } from "@/lib/formato";
 import { BotonAccion, FormAccion } from "@/components/form-accion";
 import { EditorItems } from "@/components/editor-items";
@@ -23,11 +24,12 @@ export default async function FichaTecnicaPage({ params }: { params: Promise<{ p
   });
   if (!producto) notFound();
 
-  const [costos, opciones, margen, categorias] = await Promise.all([
+  const [costos, opciones, margen, categorias, reglas] = await Promise.all([
     obtenerCostosVigentes(),
     opcionesSelector({ tipos: ["INGREDIENTE", "PREPARACION", "EMPAQUE"] }),
     obtenerParametrosMargen(),
     db.categoriaProducto.findMany({ where: { activa: true }, orderBy: { orden: "asc" } }),
+    obtenerReglasEmpaque(),
   ]);
   const items = producto.receta?.items ?? [];
   const { lineas, total, completo } = costearItems(items, costos);
@@ -87,6 +89,37 @@ export default async function FichaTecnicaPage({ params }: { params: Promise<{ p
           tituloTotal="Costo de comida por unidad"
         />
       </div>
+
+      {/* Costo real por canal */}
+      {costo !== null && (
+        <div className="card">
+          <h2 className="font-semibold">Costo real por tipo de servicio</h2>
+          <p className="mb-2 text-xs text-muted">Comida + empaques por unidad según las reglas de cada canal. Los empaques «por pedido» (salsas, bolsa) se muestran aparte porque se reparten entre todo el pedido.</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs uppercase text-muted"><tr><th className="py-1 pr-3">Canal</th><th className="py-1 pr-3 text-right">Comida</th><th className="py-1 pr-3 text-right">Empaque por unidad</th><th className="py-1 pr-3 text-right">Costo real</th>{verFinanzas && <th className="py-1 pr-3 text-right">Margen</th>}<th className="py-1 text-right">+ por pedido</th></tr></thead>
+              <tbody>
+                {TIPOS_SERVICIO.map((c) => {
+                  const porItem = costearReglas(empaquesPorItem(reglas, c.valor, { id: productoId, categoriaId: producto.categoriaId }), costos);
+                  const porPedido = costearReglas(empaquesPorPedido(reglas, c.valor), costos);
+                  const real = total.add(porItem.total);
+                  const mc = calcularMetricas(producto.precioVenta, real, margen.objetivo, margen.alerta);
+                  return (
+                    <tr key={c.valor} className="border-t border-border">
+                      <td className="py-1 pr-3">{c.etiqueta}</td>
+                      <td className="py-1 pr-3 text-right font-mono">{fmtSoles(total)}</td>
+                      <td className="py-1 pr-3 text-right font-mono">{fmtSoles(porItem.total)}{!porItem.completo && <span className="text-warning"> *</span>}<div className="text-xs text-muted">{porItem.lineas.map((l) => `${l.cantidad}× ${l.nombre}`).join(", ") || "—"}</div></td>
+                      <td className="py-1 pr-3 text-right font-mono font-semibold">{fmtSoles(real)}</td>
+                      {verFinanzas && <td className={`py-1 pr-3 text-right font-mono ${mc.alerta ? "text-danger" : ""}`}>{fmtPct(mc.margenPct)}</td>}
+                      <td className="py-1 text-right font-mono text-muted">{fmtSoles(porPedido.total)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Precio */}
       {puedePrecio && (

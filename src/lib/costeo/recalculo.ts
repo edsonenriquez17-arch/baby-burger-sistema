@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { D, costearItems, obtenerCostosVigentes, registrarPrecioInsumo, INCLUDE_ITEM_COSTEABLE, type LineaCosto } from "./costeo";
+import { canalPredeterminado, costearReglas, empaquesPorItem, obtenerReglasEmpaque } from "./empaques";
 
 type Cliente = Prisma.TransactionClient | typeof db;
 
@@ -59,7 +60,7 @@ async function recalcularPreparaciones(usuarioId: string | null, motivo: string,
 }
 
 async function recalcularProductos(motivo: string, tx: Cliente) {
-  const costos = await obtenerCostosVigentes(tx);
+  const [costos, reglas, canal] = await Promise.all([obtenerCostosVigentes(tx), obtenerReglasEmpaque(tx), canalPredeterminado(tx)]);
   const productos = await tx.producto.findMany({
     where: { activo: true },
     include: {
@@ -71,12 +72,19 @@ async function recalcularProductos(motivo: string, tx: Cliente) {
   for (const p of productos) {
     const items = p.receta?.items ?? [];
     const { lineas, total, completo } = costearItems(items, costos);
+    // Empaque de referencia: reglas POR_ITEM del canal predeterminado (los POR_PEDIDO se reparten en la venta real).
+    const empaque = costearReglas(empaquesPorItem(reglas, canal, { id: p.id, categoriaId: p.categoriaId }), costos);
+    const costoTotal = total.add(empaque.total);
+    const completoTotal = completo && empaque.completo;
     const ultimo = p.costosHist[0];
-    const detalle = lineas.map(serializarLinea);
+    const detalle = [
+      ...lineas.map(serializarLinea),
+      ...empaque.lineas.map((l) => ({ insumoId: l.insumoId, nombre: `${l.nombre} (empaque ${canal.toLowerCase()})`, cantidad: `${l.cantidad} unidad`, cantidadBase: l.cantidad.toString(), unidadBase: "unidad", costoUnitario: l.costoUnitario?.toString() ?? null, costoTotal: l.costoTotal?.toString() ?? null, pendiente: l.costoTotal ? null : ("precio" as const) })),
+    ];
     const sinCambio =
       ultimo &&
-      ultimo.completo === completo &&
-      ultimo.costoComida.sub(total).abs().lt(new D("0.0001")) &&
+      ultimo.completo === completoTotal &&
+      ultimo.costoTotal.sub(costoTotal).abs().lt(new D("0.0001")) &&
       JSON.stringify(ultimo.detalle) === JSON.stringify(detalle);
     if (sinCambio) continue;
 
@@ -84,9 +92,9 @@ async function recalcularProductos(motivo: string, tx: Cliente) {
       data: {
         productoId: p.id,
         costoComida: total,
-        costoEmpaque: 0, // se calcula por canal en la Fase 3
-        costoTotal: total,
-        completo,
+        costoEmpaque: empaque.total,
+        costoTotal,
+        completo: completoTotal,
         detalle,
         motivo,
       },

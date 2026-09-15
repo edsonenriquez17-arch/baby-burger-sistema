@@ -4,12 +4,13 @@ import { db } from "@/lib/db";
 import { requerirPermiso } from "@/lib/auth/session";
 import { calcularMetricas, costearItems, obtenerCostosVigentes, obtenerParametrosMargen, INCLUDE_ITEM_COSTEABLE } from "@/lib/costeo/costeo";
 import { fmtPct, fmtSoles } from "@/lib/formato";
+import { canalPredeterminado, costearReglas, empaquesPorItem, obtenerReglasEmpaque } from "@/lib/costeo/empaques";
 
 export const metadata: Metadata = { title: "Recetas y rentabilidad" };
 
 export default async function RecetasPage() {
   const usuario = await requerirPermiso("recetas.ver");
-  const [productos, costos, margen] = await Promise.all([
+  const [productos, costos, margen, reglas, canal] = await Promise.all([
     db.producto.findMany({
       where: { activo: true },
       include: { categoria: true, receta: { include: { items: { include: INCLUDE_ITEM_COSTEABLE } } } },
@@ -17,14 +18,17 @@ export default async function RecetasPage() {
     }),
     obtenerCostosVigentes(),
     obtenerParametrosMargen(),
+    obtenerReglasEmpaque(),
+    canalPredeterminado(),
   ]);
   const verFinanzas = usuario.permisos.has("reportes.financieros") || usuario.rol === "ADMIN";
 
   const filas = productos.map((p) => {
     const { total, completo, lineas } = costearItems(p.receta?.items ?? [], costos);
-    const costo = p.receta?.items.length ? total : null;
+    const empaque = costearReglas(empaquesPorItem(reglas, canal, { id: p.id, categoriaId: p.categoriaId }), costos);
+    const costo = p.receta?.items.length ? total.add(empaque.total) : null;
     const m = calcularMetricas(p.precioVenta, costo, margen.objetivo, margen.alerta);
-    return { p, costo, completo, pendientes: lineas.filter((l) => l.pendiente).length, m };
+    return { p, costo, comida: total, empaque: empaque.total, completo: completo && empaque.completo, pendientes: lineas.filter((l) => l.pendiente).length, m };
   });
 
   const grupos = new Map<string, typeof filas>();
@@ -35,7 +39,7 @@ export default async function RecetasPage() {
       <div>
         <h1 className="text-2xl font-bold">Recetas y rentabilidad</h1>
         <p className="text-sm text-muted">
-          Costo de comida con precios vigentes. Margen objetivo {margen.objetivo} %, alerta bajo {margen.alerta} % (editable en Configuración). El costo de empaque por canal se suma en la Fase 3.
+          Costo real = comida + empaque por unidad del canal predeterminado ({canal.toLowerCase()}), con precios vigentes. Margen objetivo {margen.objetivo} %, alerta bajo {margen.alerta} % (Configuración → General).
         </p>
       </div>
 
@@ -47,7 +51,9 @@ export default async function RecetasPage() {
               <tr>
                 <th className="px-4 py-2">Producto</th>
                 <th className="px-4 py-2 text-right">Precio</th>
-                <th className="px-4 py-2 text-right">Costo</th>
+                <th className="px-4 py-2 text-right">Comida</th>
+                <th className="px-4 py-2 text-right">Empaque</th>
+                <th className="px-4 py-2 text-right">Costo real</th>
                 {verFinanzas && (
                   <>
                     <th className="px-4 py-2 text-right">Ganancia</th>
@@ -60,13 +66,15 @@ export default async function RecetasPage() {
               </tr>
             </thead>
             <tbody>
-              {lista.map(({ p, costo, completo, pendientes, m }) => (
+              {lista.map(({ p, costo, comida, empaque, completo, pendientes, m }) => (
                 <tr key={p.id} className="border-t border-border">
                   <td className="px-4 py-2">
                     <Link href={`/recetas/${p.id}`} className="font-medium text-brand hover:underline">{p.nombre}</Link>
                     {p.esExtra && <span className="badge ml-2 bg-background text-muted">extra</span>}
                   </td>
                   <td className="px-4 py-2 text-right font-mono">{fmtSoles(p.precioVenta)}</td>
+                  <td className="px-4 py-2 text-right font-mono text-muted">{costo === null ? "—" : fmtSoles(comida)}</td>
+                  <td className="px-4 py-2 text-right font-mono text-muted">{costo === null ? "—" : fmtSoles(empaque)}</td>
                   <td className="px-4 py-2 text-right font-mono">{fmtSoles(costo)}{costo !== null && !completo && <span className="text-warning"> *</span>}</td>
                   {verFinanzas && (
                     <>

@@ -2,10 +2,10 @@
 
 import { Prisma, type TipoInsumo } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requerirPermiso } from "@/lib/auth/session";
+import { requerirPermiso, requerirUsuario } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { registrarPrecioInsumo } from "@/lib/costeo/costeo";
 import { recalcularCostos } from "@/lib/costeo/recalculo";
@@ -17,6 +17,13 @@ const decimalOpcional = z
   .trim()
   .transform((s) => (s === "" ? null : s))
   .refine((s) => s === null || (Number.isFinite(Number(s)) && Number(s) >= 0), "Número inválido");
+
+/** Ingredientes y empaques comparten acciones: basta uno de los dos permisos de edición. */
+async function requerirEditar() {
+  const u = await requerirUsuario();
+  if (!u.permisos.has("insumos.editar") && !u.permisos.has("empaques.editar")) redirect("/sin-permiso");
+  return u;
+}
 
 function rutaBase(tipo: TipoInsumo) {
   return tipo === "EMPAQUE" ? "/empaques" : "/insumos";
@@ -45,7 +52,7 @@ const esquemaInsumo = z.object({
 });
 
 export async function crearInsumo(_p: Resultado, fd: FormData): Promise<Resultado> {
-  const u = await requerirPermiso("insumos.editar");
+  const u = await requerirEditar();
   const parsed = esquemaInsumo.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const d = parsed.data;
@@ -62,7 +69,7 @@ export async function crearInsumo(_p: Resultado, fd: FormData): Promise<Resultad
 }
 
 export async function editarInsumo(_p: Resultado, fd: FormData): Promise<Resultado> {
-  const u = await requerirPermiso("insumos.editar");
+  const u = await requerirEditar();
   const id = texto(fd.get("id"));
   const actual = await db.insumo.findUnique({ where: { id } });
   if (!actual) return { error: "Insumo no encontrado" };
@@ -99,7 +106,7 @@ export async function editarInsumo(_p: Resultado, fd: FormData): Promise<Resulta
 }
 
 export async function alternarActivoInsumo(_p: Resultado, fd: FormData): Promise<Resultado> {
-  const u = await requerirPermiso("insumos.editar");
+  const u = await requerirEditar();
   const id = texto(fd.get("id"));
   const actual = await db.insumo.findUnique({ where: { id } });
   if (!actual) return { error: "No encontrado" };
@@ -116,7 +123,7 @@ export async function alternarActivoInsumo(_p: Resultado, fd: FormData): Promise
 // ---------------------------------------------------------------------
 
 export async function guardarUnidadPropia(_p: Resultado, fd: FormData): Promise<Resultado> {
-  const u = await requerirPermiso("insumos.editar");
+  const u = await requerirEditar();
   const insumoId = texto(fd.get("insumoId"));
   const unidadId = texto(fd.get("unidadId"));
   const nombre = texto(fd.get("nombre")).toLowerCase();
@@ -143,7 +150,7 @@ export async function guardarUnidadPropia(_p: Resultado, fd: FormData): Promise<
 }
 
 export async function desactivarUnidadPropia(_p: Resultado, fd: FormData): Promise<Resultado> {
-  const u = await requerirPermiso("insumos.editar");
+  const u = await requerirEditar();
   const unidadId = texto(fd.get("unidadId"));
   const unidad = await db.unidadInsumo.findUnique({ where: { id: unidadId }, include: { insumo: true } });
   if (!unidad) return { error: "No encontrada" };
@@ -168,7 +175,7 @@ async function idPorNombre(tx: Prisma.TransactionClient, tabla: "marca" | "prove
 }
 
 export async function crearPresentacion(_p: Resultado, fd: FormData): Promise<Resultado> {
-  const u = await requerirPermiso("insumos.editar");
+  const u = await requerirEditar();
   const insumoId = texto(fd.get("insumoId"));
   const nombre = texto(fd.get("nombre"));
   const marca = texto(fd.get("marca"));
@@ -223,7 +230,7 @@ export async function crearPresentacion(_p: Resultado, fd: FormData): Promise<Re
 }
 
 export async function marcarPredeterminada(_p: Resultado, fd: FormData): Promise<Resultado> {
-  const u = await requerirPermiso("insumos.editar");
+  const u = await requerirEditar();
   const presentacionId = texto(fd.get("presentacionId"));
   const pres = await db.presentacion.findUnique({ where: { id: presentacionId }, include: { insumo: true } });
   if (!pres) return { error: "No encontrada" };
@@ -238,7 +245,7 @@ export async function marcarPredeterminada(_p: Resultado, fd: FormData): Promise
 }
 
 export async function desactivarPresentacion(_p: Resultado, fd: FormData): Promise<Resultado> {
-  const u = await requerirPermiso("insumos.editar");
+  const u = await requerirEditar();
   const presentacionId = texto(fd.get("presentacionId"));
   const pres = await db.presentacion.findUnique({ where: { id: presentacionId }, include: { insumo: true } });
   if (!pres) return { error: "No encontrada" };

@@ -19,7 +19,7 @@ export const NAVEGACION: ItemNav[] = [
   { href: "/recetas", etiqueta: "Recetas y costos", icono: "📋", permiso: "recetas.ver" },
   { href: "/preparaciones", etiqueta: "Preparaciones", icono: "🥣", permiso: "recetas.ver" },
   { href: "/productos", etiqueta: "Carta", icono: "🍔", permiso: "productos.ver" },
-  { href: "/empaques", etiqueta: "Empaques y servicio", icono: "📦", permiso: "empaques.ver", fase: 3 },
+  { href: "/empaques", etiqueta: "Empaques y servicio", icono: "📦", permiso: "empaques.ver" },
   { href: "/inventario", etiqueta: "Inventario", icono: "📊", permiso: "inventario.ver", fase: 5 },
   { href: "/compras", etiqueta: "Compras", icono: "🛒", permiso: "compras.ver", fase: 6 },
   { href: "/gastos", etiqueta: "Gastos", icono: "🧮", permiso: "gastos.ver", fase: 6 },
