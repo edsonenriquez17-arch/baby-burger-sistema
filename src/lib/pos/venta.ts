@@ -121,3 +121,14 @@ export async function moverInventario(
     });
   }
 }
+
+/** Consumo de insumos (solo receta, sin empaques por canal) de `veces` unidades de un producto. Para mermas, cortesías e incidencias. */
+export async function consumoDeProducto(tx: Tx, productoId: string, veces: number) {
+  const [producto, costos] = await Promise.all([
+    tx.producto.findUniqueOrThrow({ where: { id: productoId }, include: { receta: { include: { items: { include: INCLUDE_ITEM_COSTEABLE } } } } }),
+    obtenerCostosVigentes(tx),
+  ]);
+  const lineas = consumoDeReceta(producto.receta?.items ?? [], veces, costos, "RECETA");
+  const total = lineas.reduce((a, l) => a.add(l.costoUnitario ? l.cantidad.mul(l.costoUnitario) : new D(0)), new D(0));
+  return { producto, lineas, total, completo: lineas.every((l) => !l.pendiente) };
+}

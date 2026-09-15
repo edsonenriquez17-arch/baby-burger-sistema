@@ -22,9 +22,9 @@ export const NAVEGACION: ItemNav[] = [
   { href: "/empaques", etiqueta: "Empaques y servicio", icono: "📦", permiso: "empaques.ver" },
   { href: "/inventario", etiqueta: "Inventario", icono: "📊", permiso: "inventario.ver" },
   { href: "/compras", etiqueta: "Compras", icono: "🛒", permiso: "compras.ver" },
-  { href: "/gastos", etiqueta: "Gastos", icono: "🧮", permiso: "gastos.ver", fase: 6 },
-  { href: "/perdidas", etiqueta: "Mermas y cortesías", icono: "⚠️", permiso: "inventario.mermas", fase: 6 },
-  { href: "/retiros", etiqueta: "Retiros", icono: "🏧", permiso: "caja.retiros", fase: 6 },
+  { href: "/gastos", etiqueta: "Gastos", icono: "🧮", permiso: "gastos.ver" },
+  { href: "/perdidas", etiqueta: "Mermas y cortesías", icono: "⚠️", permiso: "inventario.mermas" },
+  { href: "/retiros", etiqueta: "Retiros", icono: "🏧", permiso: "caja.retiros" },
   { href: "/reportes", etiqueta: "Reportes", icono: "📈", permiso: "reportes.ver", fase: 7 },
   { href: "/configuracion", etiqueta: "Configuración", icono: "⚙️", permiso: "configuracion.ver", enMovil: true },
 ];
