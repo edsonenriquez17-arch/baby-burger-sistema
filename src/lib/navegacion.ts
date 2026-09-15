@@ -25,6 +25,6 @@ export const NAVEGACION: ItemNav[] = [
   { href: "/gastos", etiqueta: "Gastos", icono: "🧮", permiso: "gastos.ver" },
   { href: "/perdidas", etiqueta: "Mermas y cortesías", icono: "⚠️", permiso: "inventario.mermas" },
   { href: "/retiros", etiqueta: "Retiros", icono: "🏧", permiso: "caja.retiros" },
-  { href: "/reportes", etiqueta: "Reportes", icono: "📈", permiso: "reportes.ver", fase: 7 },
+  { href: "/reportes", etiqueta: "Reportes", icono: "📈", permiso: "reportes.ver" },
   { href: "/configuracion", etiqueta: "Configuración", icono: "⚙️", permiso: "configuracion.ver", enMovil: true },
 ];

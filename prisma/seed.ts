@@ -159,6 +159,7 @@ async function seedCatalogos() {
     { clave: "margen.alerta", valor: "40", descripcion: "Margen mínimo (%): debajo de esto el producto se marca en alerta" },
     { clave: "caja.fondo_inicial", valor: "0", descripcion: "Fondo de caja sugerido al abrir el día (S/)" },
     { clave: "pos.canal_predeterminado", valor: "LLEVAR", descripcion: "Tipo de servicio usado para calcular el costo de empaque de referencia" },
+    { clave: "pe.gastos_fijos_mensuales", valor: "0", descripcion: "Gastos fijos mensuales para el punto de equilibrio (S/). 0 = usar los gastos marcados como fijos" },
   ];
   for (const c of config) {
     await db.configuracion.upsert({ where: { clave: c.clave }, update: {}, create: c });
