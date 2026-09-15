@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cambiarEstadoItem, cambiarEstadoPedido } from "../pedidos/actions";
+
+/** Reloj que avanza cada 30 s; en el servidor devuelve 0 (se muestra sin minutos). */
+function useAhora() {
+  return useSyncExternalStore(
+    (cb) => {
+      const t = setInterval(cb, 30000);
+      return () => clearInterval(t);
+    },
+    () => Math.floor(Date.now() / 30000) * 30000,
+    () => 0,
+  );
+}
 
 type Pedido = {
   id: string; numero: number; estado: string; canal: string; cliente: string | null; observaciones: string | null; creadoEn: string;
@@ -13,14 +25,12 @@ export function TableroCocina({ pedidos, puedeActualizar }: { pedidos: Pedido[];
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string>();
-  const [ahora, setAhora] = useState(0);
+  const ahora = useAhora();
 
-  // La pantalla de cocina se refresca sola cada 15 s y el reloj cada minuto.
+  // La pantalla de cocina se refresca sola cada 15 s.
   useEffect(() => {
-    setAhora(Date.now());
     const t = setInterval(() => router.refresh(), 15000);
-    const reloj = setInterval(() => setAhora(Date.now()), 60000);
-    return () => { clearInterval(t); clearInterval(reloj); };
+    return () => clearInterval(t);
   }, [router]);
   const minutos = (iso: string) => (ahora ? Math.max(0, Math.round((ahora - new Date(iso).getTime()) / 60000)) : 0);
 
