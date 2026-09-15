@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requerirPermiso } from "@/lib/auth/session";
-import { BotonAccion, FormAccion } from "@/components/form-accion";
+import { BotonEnForm, FormAccion } from "@/components/form-accion";
 import { CATALOGOS, type ClaveCatalogo } from "./catalogos";
 import { alternarEnCatalogo, crearEnCatalogo, editarEnCatalogo } from "./actions";
 
@@ -53,9 +53,9 @@ export default async function CatalogosPage({ searchParams }: { searchParams: Pr
               <input name="nombre" defaultValue={f.nombre} className="input w-56 py-1.5 text-sm" required />
               {campoExtra(def.extra ? f[def.extra.campo] : undefined)}
               <button className="btn btn-secondary min-h-9 px-3 text-xs">Guardar</button>
-              <BotonAccion accion={alternarEnCatalogo} campos={{ catalogo: clave, id: f.id }} className={activo ? "btn btn-danger min-h-9 px-3 text-xs" : "btn btn-primary min-h-9 px-3 text-xs"}>
+              <BotonEnForm accion={alternarEnCatalogo} className={activo ? "btn btn-danger min-h-9 px-3 text-xs" : "btn btn-primary min-h-9 px-3 text-xs"}>
                 {activo ? "Desactivar" : "Activar"}
-              </BotonAccion>
+              </BotonEnForm>
             </FormAccion>
           );
         })}

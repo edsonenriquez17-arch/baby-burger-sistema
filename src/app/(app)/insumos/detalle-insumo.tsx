@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { D, estadisticasPrecios, obtenerCostosVigentes } from "@/lib/costeo/costeo";
 import { fmtFecha, fmtFechaHora, fmtNum, fmtSoles } from "@/lib/formato";
-import { BotonAccion, FormAccion } from "@/components/form-accion";
+import { BotonAccion, BotonEnForm, FormAccion } from "@/components/form-accion";
 import { FormularioInsumo } from "./formulario-insumo";
 import { alternarActivoInsumo, crearPresentacion, desactivarPresentacion, desactivarUnidadPropia, guardarUnidadPropia, marcarPredeterminada, registrarPrecioManual } from "./actions";
 import type { UsuarioActual } from "@/lib/auth/session";
@@ -196,7 +196,7 @@ export async function DetalleInsumo({ id, rutaBase, usuario }: { id: string; rut
             <input name="factorABase" type="number" step="any" min="0" defaultValue={u.factorABase?.toString() ?? ""} placeholder="pendiente" className="input w-32 py-1.5 text-sm" readOnly={!puedeEditar} />
             <span className="text-sm text-muted">{base}</span>
             {puedeEditar && <button className="btn btn-secondary min-h-9 px-3 text-xs">Guardar</button>}
-            {puedeEditar && <BotonAccion accion={desactivarUnidadPropia} campos={{ unidadId: u.id }} className="btn btn-danger min-h-9 px-3 text-xs">Quitar</BotonAccion>}
+            {puedeEditar && <BotonEnForm accion={desactivarUnidadPropia} className="btn btn-danger min-h-9 px-3 text-xs" confirmar="¿Quitar esta unidad?">Quitar</BotonEnForm>}
           </FormAccion>
         ))}
         {puedeEditar && (

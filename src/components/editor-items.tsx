@@ -1,5 +1,5 @@
 import type { Resultado } from "./form-accion";
-import { BotonAccion, FormAccion } from "./form-accion";
+import { BotonEnForm, FormAccion } from "./form-accion";
 import { SelectorItem, type InsumoOpcion, type UnidadOpcion } from "./selector-item";
 import { fmtSoles } from "@/lib/formato";
 import type { LineaCosto } from "@/lib/costeo/costeo";
@@ -79,9 +79,9 @@ export function EditorItems({
                 {puedeEditar && (
                   <div className="flex gap-2">
                     <button className="btn btn-secondary min-h-9 px-3 text-xs">Guardar</button>
-                    <BotonAccion accion={acciones.quitar} campos={{ itemId: it.id }} className="btn btn-danger min-h-9 px-3 text-xs" confirmar="¿Quitar este ingrediente de la receta?">
+                    <BotonEnForm accion={acciones.quitar} className="btn btn-danger min-h-9 px-3 text-xs" confirmar="¿Quitar este ingrediente de la receta?">
                       Quitar
-                    </BotonAccion>
+                    </BotonEnForm>
                   </div>
                 )}
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
 
 export type Resultado = { ok?: boolean; error?: string; mensaje?: string };
 
@@ -61,5 +61,33 @@ export function BotonAccion({ accion, children, className = "btn btn-secondary m
       </button>
       {estado.error && <span className="ml-2 text-xs text-danger">{estado.error}</span>}
     </form>
+  );
+}
+
+/**
+ * Botón secundario DENTRO de un <FormAccion>: usa formAction para ejecutar otra acción
+ * con los mismos campos del formulario (no se pueden anidar <form>).
+ */
+export function BotonEnForm({ accion, children, className = "btn btn-secondary min-h-10 text-sm", confirmar }: { accion: (prev: Resultado, formData: FormData) => Promise<Resultado>; children: React.ReactNode; className?: string; confirmar?: string }) {
+  const [error, setError] = useState<string>();
+  const [pendiente, iniciar] = useTransition();
+  return (
+    <>
+      <button
+        type="submit"
+        className={className}
+        disabled={pendiente}
+        formAction={(fd: FormData) => {
+          if (confirmar && !window.confirm(confirmar)) return;
+          iniciar(async () => {
+            const r = await accion({}, fd);
+            setError(r.error);
+          });
+        }}
+      >
+        {children}
+      </button>
+      {error && <span className="ml-2 text-xs text-danger">{error}</span>}
+    </>
   );
 }
