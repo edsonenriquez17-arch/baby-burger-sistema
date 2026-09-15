@@ -52,7 +52,7 @@ export function PantallaPedido({ pedido, items, productos, metodos, mesas, permi
   const extras = productos.filter((p) => p.esExtra);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
       {/* Productos */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">

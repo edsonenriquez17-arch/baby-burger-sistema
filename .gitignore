@@ -42,3 +42,6 @@ next-env.d.ts
 
 # logs de herramientas externas
 /logs
+
+# config local del editor
+/.claude

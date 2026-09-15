@@ -31,6 +31,16 @@ Las reglas de negocio que gobiernan el diseño están en [docs/REGLAS.md](docs/R
 
    Abre http://localhost:3000 e ingresa con `admin` / PIN `1234` (o el `ADMIN_PIN_INICIAL` que hayas puesto). **Cambia ese PIN** en Configuración → Usuarios.
 
+### Alternativa sin Supabase (probar en tu PC)
+
+```bash
+npx prisma dev --name babyburger --detach --db-port 51214
+```
+
+y en `.env`: `DATABASE_URL="postgres://postgres:postgres@localhost:51214/template1?sslmode=disable&pgbouncer=true&connection_limit=1"` (igual para `DIRECT_URL`). Luego `npm run db:migrate`, `npm run db:seed`, `npm run dev`.
+
+> `pgbouncer=true` es obligatorio con cualquier pooler (Supabase incluido); sin él aparece el error *prepared statement already exists*.
+
 ## Scripts
 
 | Script               | Qué hace                                                     |
