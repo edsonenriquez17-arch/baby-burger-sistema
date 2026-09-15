@@ -8,6 +8,7 @@ export type AccionAuditoria =
   | "CREAR"
   | "EDITAR"
   | "DESACTIVAR"
+  | "ELIMINAR"
   | "ACTIVAR"
   | "ANULAR"
   | "CAMBIO_PRECIO"
