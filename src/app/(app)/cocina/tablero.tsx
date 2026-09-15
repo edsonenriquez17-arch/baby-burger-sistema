@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { cambiarEstadoItem, cambiarEstadoPedido } from "../pedidos/actions";
 
 type Pedido = {
-  id: string; numero: number; estado: string; canal: string; cliente: string | null; observaciones: string | null; minutos: number;
+  id: string; numero: number; estado: string; canal: string; cliente: string | null; observaciones: string | null; creadoEn: string;
   items: { id: string; nombre: string; cantidad: number; observacion: string | null; estado: string; extras: string[] }[];
 };
 
@@ -13,12 +13,16 @@ export function TableroCocina({ pedidos, puedeActualizar }: { pedidos: Pedido[];
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string>();
+  const [ahora, setAhora] = useState(0);
 
-  // La pantalla de cocina se refresca sola cada 15 s.
+  // La pantalla de cocina se refresca sola cada 15 s y el reloj cada minuto.
   useEffect(() => {
+    setAhora(Date.now());
     const t = setInterval(() => router.refresh(), 15000);
-    return () => clearInterval(t);
+    const reloj = setInterval(() => setAhora(Date.now()), 60000);
+    return () => { clearInterval(t); clearInterval(reloj); };
   }, [router]);
+  const minutos = (iso: string) => (ahora ? Math.max(0, Math.round((ahora - new Date(iso).getTime()) / 60000)) : 0);
 
   const ejecutar = (fn: () => Promise<{ error?: string }>) =>
     iniciar(async () => {
@@ -37,10 +41,10 @@ export function TableroCocina({ pedidos, puedeActualizar }: { pedidos: Pedido[];
       {pedidos.length === 0 && <p className="card text-center text-muted">Sin pedidos en preparación.</p>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {pedidos.map((p) => (
-          <div key={p.id} className={`card space-y-2 border-2 ${p.estado === "LISTO" ? "border-success" : p.minutos > 20 ? "border-danger" : "border-warning"}`}>
+          <div key={p.id} className={`card space-y-2 border-2 ${p.estado === "LISTO" ? "border-success" : minutos(p.creadoEn) > 20 ? "border-danger" : "border-warning"}`}>
             <div className="flex items-baseline justify-between">
               <div className="text-lg font-bold">#{p.numero} · {p.canal}</div>
-              <div className={`text-sm font-semibold ${p.minutos > 20 ? "text-danger" : "text-muted"}`}>{p.minutos} min</div>
+              <div className={`text-sm font-semibold ${minutos(p.creadoEn) > 20 ? "text-danger" : "text-muted"}`}>{minutos(p.creadoEn)} min</div>
             </div>
             {p.cliente && <div className="text-sm text-muted">{p.cliente}</div>}
             {p.observaciones && <div className="rounded-lg bg-warning/10 px-2 py-1 text-sm font-medium text-warning">{p.observaciones}</div>}
