@@ -1,0 +1,898 @@
+// =====================================================================
+// BABY BURGER — Esquema de base de datos
+// Reglas que este esquema respeta (ver docs/REGLAS.md):
+//  1. Nada se inventa: cantidades desconocidas son nullable (pendientes).
+//  2. Nunca se borra historial: precios, recetas y config se versionan/auditan.
+//  3. Costos de ventas pasadas se congelan en PedidoItemConsumo.
+//  4. Todo configurable: catalogos en tablas, no en codigo.
+//  5. Compra de inventario (Compra) != costo de venta (PedidoItemConsumo).
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------
+
+enum TipoInsumo {
+  INGREDIENTE
+  PREPARACION
+  EMPAQUE
+}
+
+enum TipoUnidad {
+  MASA
+  VOLUMEN
+  UNIDAD
+}
+
+enum OrigenPrecio {
+  COMPRA
+  MANUAL
+  PREPARACION
+  INICIAL
+}
+
+enum TipoServicio {
+  MESA
+  BARRA
+  LLEVAR
+  DELIVERY
+}
+
+enum TipoMesa {
+  MESA
+  BARRA
+}
+
+enum EstadoPedido {
+  ABIERTO
+  EN_PREPARACION
+  LISTO
+  ESPERANDO_PAGO
+  PAGADO
+  ANULADO
+}
+
+enum EstadoPreparacionItem {
+  PENDIENTE
+  EN_PREPARACION
+  LISTO
+  ENTREGADO
+}
+
+enum OrigenConsumo {
+  RECETA
+  EXTRA
+  REGLA_EMPAQUE
+}
+
+enum TipoMovimiento {
+  STOCK_INICIAL
+  ENTRADA_COMPRA
+  ENTRADA_PREPARACION
+  SALIDA_PREPARACION
+  SALIDA_VENTA
+  SALIDA_CORTESIA
+  SALIDA_MERMA
+  SALIDA_INCIDENCIA
+  AJUSTE_POSITIVO
+  AJUSTE_NEGATIVO
+  REVERSION
+}
+
+enum AlcanceReglaEmpaque {
+  POR_PEDIDO
+  POR_ITEM
+}
+
+enum TipoIncidencia {
+  DEVOLUCION
+  PRODUCTO_EQUIVOCADO
+  REHECHO
+  PEDIDO_PERDIDO
+  ERROR_PREPARACION
+  OTRO
+}
+
+enum Rol {
+  ADMIN
+  CAJA
+  COCINA
+}
+
+enum EstadoCierre {
+  ABIERTA
+  CERRADA
+}
+
+// ---------------------------------------------------------------------
+// CATALOGOS CONFIGURABLES
+// ---------------------------------------------------------------------
+
+/// Unidades de medida. Las base son g, ml y unidad; el resto convierte a base.
+model UnidadMedida {
+  id          String     @id @default(cuid())
+  codigo      String     @unique // g, kg, ml, L, unidad, paquete
+  nombre      String
+  tipo        TipoUnidad
+  factorABase Decimal    @db.Decimal(18, 6) // kg -> 1000 (g), L -> 1000 (ml)
+  esBase      Boolean    @default(false)
+  activa      Boolean    @default(true)
+
+  insumos        Insumo[]
+  presentaciones Presentacion[]
+  recetaItems    RecetaItem[]
+  prepItems      PreparacionItem[]
+  preparaciones  Preparacion[]
+  componentes    ComponenteBase[]
+  mermas         Merma[]
+}
+
+model CategoriaInsumo {
+  id      String     @id @default(cuid())
+  nombre  String     @unique
+  tipo    TipoInsumo // a que tipo de insumo aplica
+  orden   Int        @default(0)
+  activa  Boolean    @default(true)
+  insumos Insumo[]
+}
+
+model CategoriaProducto {
+  id     String  @id @default(cuid())
+  nombre String  @unique
+  orden  Int     @default(0)
+  activa Boolean @default(true)
+  color  String? // para botones del POS
+
+  productos   Producto[]
+  componentes ComponenteBase[]
+  reglas      ReglaEmpaque[]
+}
+
+model CategoriaGasto {
+  id     String  @id @default(cuid())
+  nombre String  @unique
+  esFijo Boolean @default(false) // alimenta punto de equilibrio
+  activa Boolean @default(true)
+  gastos Gasto[]
+}
+
+model MotivoMerma {
+  id     String  @id @default(cuid())
+  nombre String  @unique
+  activo Boolean @default(true)
+  mermas Merma[]
+}
+
+model MotivoCortesia {
+  id        String     @id @default(cuid())
+  nombre    String     @unique
+  activo    Boolean    @default(true)
+  cortesias Cortesia[]
+}
+
+model Proveedor {
+  id             String         @id @default(cuid())
+  nombre         String         @unique
+  telefono       String?
+  observaciones  String?
+  activo         Boolean        @default(true)
+  presentaciones Presentacion[]
+  compras        Compra[]
+}
+
+model Marca {
+  id             String         @id @default(cuid())
+  nombre         String         @unique
+  activa         Boolean        @default(true)
+  presentaciones Presentacion[]
+}
+
+model MetodoPago {
+  id         String  @id @default(cuid())
+  nombre     String  @unique
+  esEfectivo Boolean @default(false) // cuenta para efectivo esperado en caja
+  orden      Int     @default(0)
+  activo     Boolean @default(true)
+
+  pagos        Pago[]
+  compras      Compra[]
+  gastos       Gasto[]
+  cierreLineas CierreCajaMetodo[]
+}
+
+model Mesa {
+  id      String   @id @default(cuid())
+  nombre  String   @unique
+  tipo    TipoMesa
+  orden   Int      @default(0)
+  activa  Boolean  @default(true)
+  pedidos Pedido[]
+}
+
+/// Parametros globales: margen objetivo, nombre del negocio, fondo de caja, etc.
+model Configuracion {
+  id          String   @id @default(cuid())
+  clave       String   @unique
+  valor       String
+  descripcion String?
+  actualizado DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------
+// INSUMOS, PRESENTACIONES Y PRECIOS
+// ---------------------------------------------------------------------
+
+/// Ingredientes, preparaciones internas y empaques comparten esta tabla.
+/// En pantalla se muestran como modulos separados segun `tipo`.
+model Insumo {
+  id                String           @id @default(cuid())
+  nombre            String           @unique
+  tipo              TipoInsumo
+  categoriaId       String?
+  categoria         CategoriaInsumo? @relation(fields: [categoriaId], references: [id])
+  unidadBaseId      String
+  unidadBase        UnidadMedida     @relation(fields: [unidadBaseId], references: [id])
+  stockActual       Decimal          @default(0) @db.Decimal(18, 4) // en unidad base, cache de movimientos
+  stockMinimo       Decimal?         @db.Decimal(18, 4) // null = sin alerta configurada
+  esCostoCompartido Boolean          @default(false) // ej. aceite de plancha: no va en receta, es costo operativo
+  observaciones     String?
+  activo            Boolean          @default(true)
+  creadoEn          DateTime         @default(now())
+  actualizadoEn     DateTime         @updatedAt
+
+  unidadesPropias  UnidadInsumo[]
+  presentaciones   Presentacion[]
+  precios          PrecioInsumo[]
+  preparacion      Preparacion?           @relation("InsumoResultado")
+  prepItems        PreparacionItem[]
+  recetaItems      RecetaItem[]
+  componentes      ComponenteBase[]
+  reglasEmpaque    ReglaEmpaque[]
+  compraItems      CompraItem[]
+  movimientos      MovimientoInventario[]
+  consumos         PedidoItemConsumo[]
+  mermas           Merma[]
+  cortesiaConsumos CortesiaConsumo[]
+}
+
+/// Unidades propias de un insumo: "slice" de queso, "bola" de carne, "bolsa" de pan.
+/// factorABase nullable = todavia no se conoce (regla 1).
+model UnidadInsumo {
+  id          String   @id @default(cuid())
+  insumoId    String
+  insumo      Insumo   @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+  nombre      String // slice, bola, mini, bolsa
+  factorABase Decimal? @db.Decimal(18, 6) // cuantas unidades base equivale (slice = ? g)
+  activa      Boolean  @default(true)
+
+  recetaItems RecetaItem[]
+  prepItems   PreparacionItem[]
+  componentes ComponenteBase[]
+
+  @@unique([insumoId, nombre])
+}
+
+/// Como se compra un insumo: marca + proveedor + contenido. Un insumo puede tener varias.
+model Presentacion {
+  id                 String       @id @default(cuid())
+  insumoId           String
+  insumo             Insumo       @relation(fields: [insumoId], references: [id])
+  nombre             String // "Bolsa 400 g", "Paquete x6", "Bloque 1 kg"
+  marcaId            String?
+  marca              Marca?       @relation(fields: [marcaId], references: [id])
+  proveedorId        String?
+  proveedor          Proveedor?   @relation(fields: [proveedorId], references: [id])
+  contenido          Decimal?     @db.Decimal(18, 4) // cantidad que trae (400, 1, 6). null = pendiente
+  unidadContenidoId  String
+  unidadContenido    UnidadMedida @relation(fields: [unidadContenidoId], references: [id])
+  unidadesPorPaquete Int? // si es paquete: cuantas unidades trae (pan x6). null = pendiente
+  esPredeterminada   Boolean      @default(false) // la que fija el costo vigente del insumo
+  observaciones      String?
+  activa             Boolean      @default(true)
+  creadoEn           DateTime     @default(now())
+
+  precios     PrecioInsumo[]
+  compraItems CompraItem[]
+
+  @@index([insumoId])
+}
+
+/// Historial de costo por unidad base. NUNCA se borra ni se sobreescribe.
+model PrecioInsumo {
+  id                 String        @id @default(cuid())
+  insumoId           String
+  insumo             Insumo        @relation(fields: [insumoId], references: [id])
+  presentacionId     String?
+  presentacion       Presentacion? @relation(fields: [presentacionId], references: [id])
+  precioPresentacion Decimal?      @db.Decimal(14, 4) // lo que se pago por la presentacion
+  costoUnitarioBase  Decimal       @db.Decimal(18, 8) // S/ por g / ml / unidad
+  origen             OrigenPrecio
+  compraItemId       String?       @unique
+  compraItem         CompraItem?   @relation(fields: [compraItemId], references: [id])
+  vigenteDesde       DateTime      @default(now())
+  vigenteHasta       DateTime? // null = vigente
+  nota               String?
+  usuarioId          String?
+  usuario            Usuario?      @relation(fields: [usuarioId], references: [id])
+
+  @@index([insumoId, vigenteDesde])
+}
+
+// ---------------------------------------------------------------------
+// PREPARACIONES (SUBRECETAS)
+// ---------------------------------------------------------------------
+
+/// Mayonesa casera, aji, chimichurri, BBQ especial, chicha, maracuya, mini burger...
+/// Produce un Insumo tipo PREPARACION que se usa como ingrediente en recetas.
+model Preparacion {
+  id                  String       @id @default(cuid())
+  insumoResultadoId   String       @unique
+  insumoResultado     Insumo       @relation("InsumoResultado", fields: [insumoResultadoId], references: [id])
+  nombre              String
+  rendimientoCantidad Decimal?     @db.Decimal(18, 4) // "produce 1.4 kg". null = pendiente
+  rendimientoUnidadId String
+  rendimientoUnidad   UnidadMedida @relation(fields: [rendimientoUnidadId], references: [id])
+  instrucciones       String?
+  activa              Boolean      @default(true)
+  creadoEn            DateTime     @default(now())
+  actualizadoEn       DateTime     @updatedAt
+
+  items PreparacionItem[]
+}
+
+model PreparacionItem {
+  id             String        @id @default(cuid())
+  preparacionId  String
+  preparacion    Preparacion   @relation(fields: [preparacionId], references: [id], onDelete: Cascade)
+  insumoId       String
+  insumo         Insumo        @relation(fields: [insumoId], references: [id])
+  cantidad       Decimal?      @db.Decimal(18, 4) // null = pendiente
+  unidadMedidaId String?
+  unidadMedida   UnidadMedida? @relation(fields: [unidadMedidaId], references: [id])
+  unidadInsumoId String?
+  unidadInsumo   UnidadInsumo? @relation(fields: [unidadInsumoId], references: [id])
+  notas          String?
+  orden          Int           @default(0)
+
+  @@index([preparacionId])
+}
+
+// ---------------------------------------------------------------------
+// PRODUCTOS Y RECETAS
+// ---------------------------------------------------------------------
+
+model Producto {
+  id            String            @id @default(cuid())
+  nombre        String            @unique
+  descripcion   String?
+  categoriaId   String
+  categoria     CategoriaProducto @relation(fields: [categoriaId], references: [id])
+  precioVenta   Decimal           @default(0) @db.Decimal(14, 2)
+  esExtra       Boolean           @default(false) // se ofrece como agregado sobre otros productos
+  disponible    Boolean           @default(true) // "agotado" temporal en POS
+  activo        Boolean           @default(true)
+  orden         Int               @default(0)
+  creadoEn      DateTime          @default(now())
+  actualizadoEn DateTime          @updatedAt
+
+  receta        Receta?
+  preciosHist   PrecioProductoHistorial[]
+  costosHist    CostoProductoHistorial[]
+  pedidoItems   PedidoItem[]
+  pedidoExtras  PedidoItemExtra[]
+  reglasEmpaque ReglaEmpaque[]
+  mermas        Merma[]
+  cortesias     Cortesia[]
+  incidencias   Incidencia[]
+}
+
+/// Cada cambio de precio de venta queda registrado.
+model PrecioProductoHistorial {
+  id           String    @id @default(cuid())
+  productoId   String
+  producto     Producto  @relation(fields: [productoId], references: [id])
+  precio       Decimal   @db.Decimal(14, 2)
+  vigenteDesde DateTime  @default(now())
+  vigenteHasta DateTime?
+  motivo       String?
+  usuarioId    String?
+  usuario      Usuario?  @relation(fields: [usuarioId], references: [id])
+
+  @@index([productoId, vigenteDesde])
+}
+
+/// Snapshot del costo de un producto cada vez que cambia un insumo o la receta.
+/// Permite "cuanto costaba la Smash en agosto y que la movio".
+model CostoProductoHistorial {
+  id           String   @id @default(cuid())
+  productoId   String
+  producto     Producto @relation(fields: [productoId], references: [id])
+  fecha        DateTime @default(now())
+  costoComida  Decimal  @db.Decimal(14, 4)
+  costoEmpaque Decimal  @db.Decimal(14, 4) // segun reglas del canal predeterminado
+  costoTotal   Decimal  @db.Decimal(14, 4)
+  detalle      Json // [{insumo, cantidad, costoUnitario, costoTotal}]
+  motivo       String? // "Subio carne S/10.20 -> S/12.00"
+  completo     Boolean  @default(true) // false si hay cantidades pendientes
+
+  @@index([productoId, fecha])
+}
+
+/// Ficha tecnica del producto. Una receta vigente por producto; los cambios
+/// quedan en LogAuditoria (valor anterior / nuevo) y en CostoProductoHistorial.
+model Receta {
+  id            String   @id @default(cuid())
+  productoId    String   @unique
+  producto      Producto @relation(fields: [productoId], references: [id])
+  notas         String?
+  actualizadoEn DateTime @updatedAt
+
+  items RecetaItem[]
+}
+
+model RecetaItem {
+  id               String        @id @default(cuid())
+  recetaId         String
+  receta           Receta        @relation(fields: [recetaId], references: [id], onDelete: Cascade)
+  insumoId         String
+  insumo           Insumo        @relation(fields: [insumoId], references: [id])
+  cantidad         Decimal?      @db.Decimal(18, 4) // null = pendiente de definir
+  unidadMedidaId   String?
+  unidadMedida     UnidadMedida? @relation(fields: [unidadMedidaId], references: [id])
+  unidadInsumoId   String?
+  unidadInsumo     UnidadInsumo? @relation(fields: [unidadInsumoId], references: [id])
+  esComponenteBase Boolean       @default(false) // vino de ComponenteBase de la categoria
+  notas            String?
+  orden            Int           @default(0)
+
+  @@index([recetaId])
+}
+
+/// "Toda smash lleva lechuga, tomate y papas": se copia a cada receta nueva de la categoria.
+model ComponenteBase {
+  id             String            @id @default(cuid())
+  categoriaId    String
+  categoria      CategoriaProducto @relation(fields: [categoriaId], references: [id], onDelete: Cascade)
+  insumoId       String
+  insumo         Insumo            @relation(fields: [insumoId], references: [id])
+  cantidad       Decimal?          @db.Decimal(18, 4)
+  unidadMedidaId String?
+  unidadMedida   UnidadMedida?     @relation(fields: [unidadMedidaId], references: [id])
+  unidadInsumoId String?
+  unidadInsumo   UnidadInsumo?     @relation(fields: [unidadInsumoId], references: [id])
+  orden          Int               @default(0)
+
+  @@unique([categoriaId, insumoId])
+}
+
+/// Que empaques/descartables van segun el tipo de servicio.
+/// POR_PEDIDO: 1 vez por pedido (envases de salsa, servilletas, bolsa).
+/// POR_ITEM: por cada unidad vendida de la categoria/producto indicado (1 caja por hamburguesa).
+model ReglaEmpaque {
+  id           String              @id @default(cuid())
+  tipoServicio TipoServicio
+  insumoId     String
+  insumo       Insumo              @relation(fields: [insumoId], references: [id])
+  cantidad     Decimal             @db.Decimal(18, 4)
+  alcance      AlcanceReglaEmpaque
+  categoriaId  String?
+  categoria    CategoriaProducto?  @relation(fields: [categoriaId], references: [id])
+  productoId   String?
+  producto     Producto?           @relation(fields: [productoId], references: [id])
+  activa       Boolean             @default(true)
+
+  @@index([tipoServicio])
+}
+
+// ---------------------------------------------------------------------
+// PEDIDOS / POS
+// ---------------------------------------------------------------------
+
+model Pedido {
+  id              String       @id @default(cuid())
+  numero          Int          @unique @default(autoincrement())
+  fecha           DateTime     @default(now())
+  tipoServicio    TipoServicio
+  mesaId          String?
+  mesa            Mesa?        @relation(fields: [mesaId], references: [id])
+  clienteNombre   String?
+  clienteTelefono String?
+  estado          EstadoPedido @default(ABIERTO)
+  observaciones   String?
+  subtotal        Decimal      @default(0) @db.Decimal(14, 2)
+  descuentoMonto  Decimal      @default(0) @db.Decimal(14, 2)
+  descuentoMotivo String?
+  total           Decimal      @default(0) @db.Decimal(14, 2)
+  costoTotal      Decimal      @default(0) @db.Decimal(14, 4) // congelado al cerrar
+  motivoAnulacion String?
+  anuladoEn       DateTime?
+  anuladoPorId    String?
+  anuladoPor      Usuario?     @relation("PedidoAnuladoPor", fields: [anuladoPorId], references: [id])
+  pagadoEn        DateTime?
+  usuarioId       String
+  usuario         Usuario      @relation(fields: [usuarioId], references: [id])
+  cierreCajaId    String?
+  cierreCaja      CierreCaja?  @relation(fields: [cierreCajaId], references: [id])
+  creadoEn        DateTime     @default(now())
+  actualizadoEn   DateTime     @updatedAt
+
+  items       PedidoItem[]
+  pagos       Pago[]
+  incidencias Incidencia[]
+
+  @@index([fecha])
+  @@index([estado])
+}
+
+model PedidoItem {
+  id                String                @id @default(cuid())
+  pedidoId          String
+  pedido            Pedido                @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  productoId        String
+  producto          Producto              @relation(fields: [productoId], references: [id])
+  nombreProducto    String // snapshot por si el producto cambia de nombre
+  cantidad          Int
+  precioUnitario    Decimal               @db.Decimal(14, 2) // congelado
+  observacion       String? // "sin tomate", "bien cocida"
+  estadoPreparacion EstadoPreparacionItem @default(PENDIENTE)
+  costoUnitario     Decimal               @default(0) @db.Decimal(14, 4) // comida + empaque, congelado
+  creadoEn          DateTime              @default(now())
+
+  extras   PedidoItemExtra[]
+  consumos PedidoItemConsumo[]
+
+  @@index([pedidoId])
+}
+
+model PedidoItemExtra {
+  id             String     @id @default(cuid())
+  pedidoItemId   String
+  pedidoItem     PedidoItem @relation(fields: [pedidoItemId], references: [id], onDelete: Cascade)
+  productoId     String
+  producto       Producto   @relation(fields: [productoId], references: [id])
+  nombre         String
+  cantidad       Int        @default(1)
+  precioUnitario Decimal    @db.Decimal(14, 2)
+  costoUnitario  Decimal    @default(0) @db.Decimal(14, 4)
+}
+
+/// Detalle congelado de lo consumido por cada item vendido (regla 3).
+/// Alimenta inventario y el analisis de que insumo movio el costo.
+model PedidoItemConsumo {
+  id            String        @id @default(cuid())
+  pedidoItemId  String
+  pedidoItem    PedidoItem    @relation(fields: [pedidoItemId], references: [id], onDelete: Cascade)
+  insumoId      String
+  insumo        Insumo        @relation(fields: [insumoId], references: [id])
+  origen        OrigenConsumo
+  cantidad      Decimal       @db.Decimal(18, 4) // total en unidad base para el item
+  costoUnitario Decimal       @db.Decimal(18, 8) // S/ por unidad base al momento de la venta
+  costoTotal    Decimal       @db.Decimal(14, 4)
+  pendiente     Boolean       @default(false) // true si la receta no tenia cantidad definida
+
+  @@index([pedidoItemId])
+  @@index([insumoId])
+}
+
+/// Un pedido puede tener varios pagos (pago dividido).
+model Pago {
+  id           String     @id @default(cuid())
+  pedidoId     String
+  pedido       Pedido     @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  metodoPagoId String
+  metodoPago   MetodoPago @relation(fields: [metodoPagoId], references: [id])
+  monto        Decimal    @db.Decimal(14, 2)
+  referencia   String? // nro operacion Yape/Plin
+  fecha        DateTime   @default(now())
+
+  @@index([pedidoId])
+}
+
+// ---------------------------------------------------------------------
+// INVENTARIO
+// ---------------------------------------------------------------------
+
+model MovimientoInventario {
+  id              String         @id @default(cuid())
+  insumoId        String
+  insumo          Insumo         @relation(fields: [insumoId], references: [id])
+  tipo            TipoMovimiento
+  cantidad        Decimal        @db.Decimal(18, 4) // positiva entra, negativa sale (unidad base)
+  stockResultante Decimal?       @db.Decimal(18, 4)
+  costoUnitario   Decimal?       @db.Decimal(18, 8)
+  motivo          String?
+  referenciaTipo  String? // Pedido, Compra, Merma, Cortesia, Incidencia, Preparacion
+  referenciaId    String?
+  fecha           DateTime       @default(now())
+  usuarioId       String?
+  usuario         Usuario?       @relation(fields: [usuarioId], references: [id])
+
+  @@index([insumoId, fecha])
+  @@index([referenciaTipo, referenciaId])
+}
+
+// ---------------------------------------------------------------------
+// COMPRAS, GASTOS, PERDIDAS, RETIROS
+// ---------------------------------------------------------------------
+
+/// Compra de inventario: salida de dinero + entrada de stock. NO es costo de venta.
+model Compra {
+  id                String      @id @default(cuid())
+  fecha             DateTime    @default(now())
+  proveedorId       String?
+  proveedor         Proveedor?  @relation(fields: [proveedorId], references: [id])
+  numeroComprobante String?
+  total             Decimal     @default(0) @db.Decimal(14, 2)
+  metodoPagoId      String?
+  metodoPago        MetodoPago? @relation(fields: [metodoPagoId], references: [id])
+  pagadoDesdeCaja   Boolean     @default(true) // afecta efectivo esperado del cierre
+  observaciones     String?
+  usuarioId         String
+  usuario           Usuario     @relation(fields: [usuarioId], references: [id])
+  creadoEn          DateTime    @default(now())
+
+  items CompraItem[]
+
+  @@index([fecha])
+}
+
+model CompraItem {
+  id                String        @id @default(cuid())
+  compraId          String
+  compra            Compra        @relation(fields: [compraId], references: [id], onDelete: Cascade)
+  insumoId          String
+  insumo            Insumo        @relation(fields: [insumoId], references: [id])
+  presentacionId    String?
+  presentacion      Presentacion? @relation(fields: [presentacionId], references: [id])
+  cantidad          Decimal       @db.Decimal(18, 4) // numero de presentaciones compradas
+  precioUnitario    Decimal       @db.Decimal(14, 4) // precio por presentacion
+  total             Decimal       @db.Decimal(14, 2)
+  cantidadBase      Decimal       @db.Decimal(18, 4) // convertido a unidad base (entra a stock)
+  costoUnitarioBase Decimal       @db.Decimal(18, 8)
+  observaciones     String?
+
+  precio PrecioInsumo?
+
+  @@index([compraId])
+  @@index([insumoId])
+}
+
+model Gasto {
+  id              String         @id @default(cuid())
+  fecha           DateTime       @default(now())
+  categoriaId     String
+  categoria       CategoriaGasto @relation(fields: [categoriaId], references: [id])
+  monto           Decimal        @db.Decimal(14, 2)
+  descripcion     String
+  comprobanteUrl  String?
+  observaciones   String?
+  esFijo          Boolean        @default(false)
+  metodoPagoId    String?
+  metodoPago      MetodoPago?    @relation(fields: [metodoPagoId], references: [id])
+  pagadoDesdeCaja Boolean        @default(true)
+  usuarioId       String
+  usuario         Usuario        @relation(fields: [usuarioId], references: [id])
+  creadoEn        DateTime       @default(now())
+
+  @@index([fecha])
+}
+
+/// Perdida de insumo o de producto terminado. Descuenta inventario.
+model Merma {
+  id             String        @id @default(cuid())
+  fecha          DateTime      @default(now())
+  insumoId       String?
+  insumo         Insumo?       @relation(fields: [insumoId], references: [id])
+  productoId     String?
+  producto       Producto?     @relation(fields: [productoId], references: [id])
+  cantidad       Decimal       @db.Decimal(18, 4)
+  unidadMedidaId String?
+  unidadMedida   UnidadMedida? @relation(fields: [unidadMedidaId], references: [id])
+  motivoId       String
+  motivo         MotivoMerma   @relation(fields: [motivoId], references: [id])
+  costo          Decimal       @default(0) @db.Decimal(14, 4) // calculado al registrar
+  observaciones  String?
+  usuarioId      String
+  usuario        Usuario       @relation(fields: [usuarioId], references: [id])
+
+  @@index([fecha])
+}
+
+/// Producto regalado: descuenta inventario, no es venta, tiene costo.
+model Cortesia {
+  id            String         @id @default(cuid())
+  fecha         DateTime       @default(now())
+  productoId    String
+  producto      Producto       @relation(fields: [productoId], references: [id])
+  cantidad      Int
+  motivoId      String
+  motivo        MotivoCortesia @relation(fields: [motivoId], references: [id])
+  costoTotal    Decimal        @default(0) @db.Decimal(14, 4)
+  observaciones String?
+  usuarioId     String
+  usuario       Usuario        @relation(fields: [usuarioId], references: [id])
+
+  consumos CortesiaConsumo[]
+
+  @@index([fecha])
+}
+
+model CortesiaConsumo {
+  id            String   @id @default(cuid())
+  cortesiaId    String
+  cortesia      Cortesia @relation(fields: [cortesiaId], references: [id], onDelete: Cascade)
+  insumoId      String
+  insumo        Insumo   @relation(fields: [insumoId], references: [id])
+  cantidad      Decimal  @db.Decimal(18, 4)
+  costoUnitario Decimal  @db.Decimal(18, 8)
+  costoTotal    Decimal  @db.Decimal(14, 4)
+}
+
+/// Devoluciones, productos rehechos, equivocados, perdidos.
+model Incidencia {
+  id               String         @id @default(cuid())
+  fecha            DateTime       @default(now())
+  tipo             TipoIncidencia
+  pedidoId         String?
+  pedido           Pedido?        @relation(fields: [pedidoId], references: [id])
+  productoId       String?
+  producto         Producto?      @relation(fields: [productoId], references: [id])
+  cantidad         Int            @default(1)
+  motivo           String
+  costoGenerado    Decimal        @default(0) @db.Decimal(14, 4)
+  ajustaInventario Boolean        @default(true)
+  observaciones    String?
+  usuarioId        String
+  usuario          Usuario        @relation(fields: [usuarioId], references: [id])
+
+  @@index([fecha])
+}
+
+/// Dinero que sale del negocio. Separado de gastos operativos.
+model RetiroCaja {
+  id            String      @id @default(cuid())
+  fecha         DateTime    @default(now())
+  monto         Decimal     @db.Decimal(14, 2)
+  persona       String
+  motivo        String
+  observaciones String?
+  usuarioId     String
+  usuario       Usuario     @relation(fields: [usuarioId], references: [id])
+  cierreCajaId  String?
+  cierreCaja    CierreCaja? @relation(fields: [cierreCajaId], references: [id])
+
+  @@index([fecha])
+}
+
+// ---------------------------------------------------------------------
+// CAJA
+// ---------------------------------------------------------------------
+
+model CierreCaja {
+  id               String       @id @default(cuid())
+  fechaApertura    DateTime     @default(now())
+  fechaCierre      DateTime?
+  estado           EstadoCierre @default(ABIERTA)
+  fondoInicial     Decimal      @default(0) @db.Decimal(14, 2)
+  ventasTotal      Decimal      @default(0) @db.Decimal(14, 2)
+  numeroPedidos    Int          @default(0)
+  numeroAnulados   Int          @default(0)
+  descuentosTotal  Decimal      @default(0) @db.Decimal(14, 2)
+  retirosTotal     Decimal      @default(0) @db.Decimal(14, 2)
+  gastosEfectivo   Decimal      @default(0) @db.Decimal(14, 2)
+  comprasEfectivo  Decimal      @default(0) @db.Decimal(14, 2)
+  efectivoEsperado Decimal      @default(0) @db.Decimal(14, 2)
+  efectivoReal     Decimal?     @db.Decimal(14, 2)
+  diferencia       Decimal?     @db.Decimal(14, 2) // real - esperado (+ sobrante / - faltante)
+  observaciones    String?
+  abiertoPorId     String
+  abiertoPor       Usuario      @relation("CierreAbiertoPor", fields: [abiertoPorId], references: [id])
+  cerradoPorId     String?
+  cerradoPor       Usuario?     @relation("CierreCerradoPor", fields: [cerradoPorId], references: [id])
+
+  lineas  CierreCajaMetodo[]
+  pedidos Pedido[]
+  retiros RetiroCaja[]
+
+  @@index([fechaApertura])
+}
+
+model CierreCajaMetodo {
+  id           String     @id @default(cuid())
+  cierreCajaId String
+  cierreCaja   CierreCaja @relation(fields: [cierreCajaId], references: [id], onDelete: Cascade)
+  metodoPagoId String
+  metodoPago   MetodoPago @relation(fields: [metodoPagoId], references: [id])
+  monto        Decimal    @db.Decimal(14, 2)
+
+  @@unique([cierreCajaId, metodoPagoId])
+}
+
+// ---------------------------------------------------------------------
+// USUARIOS, PERMISOS Y AUDITORIA
+// ---------------------------------------------------------------------
+
+model Usuario {
+  id            String   @id @default(cuid())
+  nombre        String
+  usuario       String   @unique // login corto
+  pinHash       String
+  rol           Rol
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  permisos        UsuarioPermiso[]
+  pedidos         Pedido[]
+  pedidosAnulados Pedido[]                  @relation("PedidoAnuladoPor")
+  compras         Compra[]
+  gastos          Gasto[]
+  mermas          Merma[]
+  cortesias       Cortesia[]
+  incidencias     Incidencia[]
+  retiros         RetiroCaja[]
+  cierresAbiertos CierreCaja[]              @relation("CierreAbiertoPor")
+  cierresCerrados CierreCaja[]              @relation("CierreCerradoPor")
+  movimientos     MovimientoInventario[]
+  preciosInsumo   PrecioInsumo[]
+  preciosProducto PrecioProductoHistorial[]
+  logs            LogAuditoria[]
+}
+
+model Permiso {
+  id          String           @id @default(cuid())
+  clave       String           @unique // pedidos.crear, pedidos.anular, recetas.editar, ...
+  modulo      String
+  descripcion String
+  roles       RolPermiso[]
+  usuarios    UsuarioPermiso[]
+}
+
+/// Permisos base por rol (configurables).
+model RolPermiso {
+  id        String  @id @default(cuid())
+  rol       Rol
+  permisoId String
+  permiso   Permiso @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+
+  @@unique([rol, permisoId])
+}
+
+/// Excepciones por usuario: conceder o quitar un permiso puntual.
+model UsuarioPermiso {
+  id        String  @id @default(cuid())
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  permisoId String
+  permiso   Permiso @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+  concedido Boolean // true = agrega, false = quita
+
+  @@unique([usuarioId, permisoId])
+}
+
+/// Toda accion sensible: quien, que, cuando, valor anterior y nuevo.
+model LogAuditoria {
+  id            String   @id @default(cuid())
+  fecha         DateTime @default(now())
+  usuarioId     String?
+  usuario       Usuario? @relation(fields: [usuarioId], references: [id])
+  accion        String // CREAR, EDITAR, ELIMINAR, ANULAR, CAMBIO_PRECIO, ...
+  entidad       String // Insumo, Receta, Producto, Pedido, ...
+  entidadId     String?
+  descripcion   String?
+  valorAnterior Json?
+  valorNuevo    Json?
+
+  @@index([entidad, entidadId])
+  @@index([fecha])
+}

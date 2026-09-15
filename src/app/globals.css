@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/*
+  Paleta Baby Burger — tomada de la carta (azul + damero blanco/azul).
+  Ajustar aquí cuando llegue el manual de marca; nada más depende de valores fijos.
+*/
+:root {
+  --brand: #1f3fd8;
+  --brand-dark: #142c9c;
+  --brand-light: #e8ecfb;
+  --brand-contrast: #ffffff;
+  --background: #f6f7fb;
+  --surface: #ffffff;
+  --foreground: #14172b;
+  --muted: #5d6280;
+  --border: #dfe2ee;
+  --success: #15803d;
+  --warning: #b45309;
+  --danger: #b91c1c;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-light: var(--brand-light);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Damero de la marca, para cabeceras y detalles */
+.damero {
+  background-color: var(--brand);
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.18) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.18) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.18) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.18) 75%);
+  background-size: 24px 24px;
+  background-position:
+    0 0,
+    12px 12px;
+}
+
+/* Controles base: grandes, cómodos para tocar en mostrador */
+.input {
+  @apply w-full rounded-xl border border-border bg-surface px-4 py-3 text-base text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/30 disabled:opacity-60;
+}
+.btn {
+  @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-5 text-base font-semibold transition active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100;
+}
+.btn-primary {
+  @apply bg-brand text-brand-contrast hover:bg-brand-dark;
+}
+.btn-secondary {
+  @apply border border-border bg-surface text-foreground hover:bg-brand-light;
+}
+.btn-danger {
+  @apply border border-danger/30 bg-surface text-danger hover:bg-danger/10;
+}
+.card {
+  @apply rounded-2xl border border-border bg-surface p-5 shadow-sm;
+}
+.label {
+  @apply mb-1 block text-sm font-medium text-muted;
+}
+.badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+}
