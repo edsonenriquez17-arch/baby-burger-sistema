@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: { default: "Baby Burger", template: "%s · Baby Burger" },
   description: "Sistema de gestión de Baby Burger",
   manifest: "/manifest.webmanifest",
+  icons: { icon: "/icon.svg", apple: "/icon.svg" },
   appleWebApp: { capable: true, title: "Baby Burger", statusBarStyle: "default" },
 };
 

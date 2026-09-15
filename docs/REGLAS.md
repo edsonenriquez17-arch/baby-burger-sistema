@@ -53,6 +53,11 @@ La pantalla de pedidos se usa en celular/tablet mientras se atiende: botones gra
 | Mini burger                            | Es una preparación (20 g carne + 1 slice + 1 petit pan) que los Baby Boxes usan ×4 o ×6.                                                                        |
 | Alitas BBQ                             | La receta apunta a "Salsa BBQ especial" (preparación). Si se usa la BBQ comprada, se cambia desde Recetas.                                                       |
 | Margen objetivo / alerta               | Valores de partida 60 % / 40 % en Configuración → General. **Son configurables, no datos del negocio.**                                                          |
+| Empaques "por pedido" al cobrar        | Se consumen una vez por pedido y se registran en el primer ítem del pedido (`PedidoItemConsumo` origen `REGLA_EMPAQUE`).                                          |
+| Cortesías, mermas e incidencias        | Descuentan solo la receta del producto (sin empaques por canal), con costo vigente al momento de registrarlas.                                                   |
+| Costo de referencia de un producto     | `CostoProductoHistorial` usa comida + empaques *por ítem* del canal predeterminado (`pos.canal_predeterminado`). El costo real de cada venta usa el canal real.  |
+| Punto de equilibrio                    | Gastos fijos = gastos marcados como fijos en el período llevados a 30 días, o `pe.gastos_fijos_mensuales` si es > 0. Margen de contribución con datos reales.     |
+| Anulación de venta pagada              | Los pagos y consumos se conservan (historial); el inventario se devuelve con movimientos `REVERSION`.                                                            |
 
 ## Pendientes que el negocio debe completar desde el sistema
 
@@ -62,3 +67,4 @@ La pantalla de pedidos se usa en celular/tablet mientras se atiende: botones gra
 - Ingredientes y rendimiento de: salsa secreta, chicha, maracuyá, cebolla caramelizada, piña glaseada; completar chimichurri y BBQ especial.
 - Servilletas y tenedores por pedido según canal.
 - Precios de todos los insumos sin precio (se registran al cargar compras).
+- Stock inicial de cada insumo (Inventario → insumo → Ajustar → "Fijar en") y stock mínimo para alertas.

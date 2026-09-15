@@ -69,13 +69,44 @@ src/
       configuracion/   Usuarios y permisos · General · Auditoría
 ```
 
-## Plan por fases
+## Módulos
 
-1. ✅ **Fundación** — proyecto, esquema completo, auth y roles, seed.
-2. Costeo — ingredientes con conversión y historial de precios, recetas, preparaciones.
-3. Empaques y costo real por canal.
-4. POS y caja — pedidos, congelamiento de costo, pagos divididos, cierre.
-5. Inventario conectado — descuento automático, compras, ajustes, mermas, alertas.
-6. Compras, gastos, cortesías, incidencias, retiros.
-7. Reportes, dashboard, "¿por qué terminé en S/0?", punto de equilibrio.
-8. Pulido — auditoría fina, UX de mostrador, branding definitivo.
+| Ruta | Qué hace |
+| --- | --- |
+| `/` | Dashboard: ventas de hoy, costo, utilidad estimada y alertas (stock bajo, margen bajo, subidas de precio, costos que subieron) |
+| `/pedidos`, `/pedidos/[id]` | POS: mesas, barra, para llevar, delivery. Productos → cantidad → extras → observación → cobrar (pagos divididos). Al cobrar se congela el costo real y se descuenta inventario |
+| `/cocina` | Tablero de cocina con auto-refresco y estados por ítem |
+| `/caja` | Apertura con fondo, resumen en vivo, cierre con efectivo real y sobrante/faltante |
+| `/insumos`, `/empaques` | Ingredientes y empaques: presentaciones, marcas, proveedores, precio manual, historial (actual/anterior/mín/máx/promedio), unidades propias (slice, bola) |
+| `/empaques/reglas` | Qué empaques van por pedido o por ítem según canal |
+| `/preparaciones` | Subrecetas (mayonesa, ají, chimichurri, chicha…) con costo por g/ml/unidad |
+| `/recetas`, `/recetas/[id]` | Fichas técnicas, costo real por canal, margen/markup/precio recomendado, historial de costo y de precio |
+| `/productos` | Carta, agotados, componentes base por categoría |
+| `/inventario` | Stock, mínimos, valor, movimientos, ajustes, producción de lotes |
+| `/compras` | Compras multilínea por presentación → inventario + precio vigente |
+| `/gastos`, `/retiros`, `/perdidas` | Gastos operativos, retiros del negocio, mermas / cortesías / incidencias |
+| `/reportes` | Resumen, productos y rentabilidad, "¿por qué terminé en S/0?", punto de equilibrio, ventas en detalle, evolución de costos |
+| `/configuracion` | Usuarios y permisos, permisos por rol, parámetros generales, catálogos, auditoría |
+
+## Despliegue (Vercel + Supabase)
+
+1. Importa el repo en [vercel.com/new](https://vercel.com/new).
+2. En *Environment Variables* pega `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET` (y opcionalmente `ADMIN_PIN_INICIAL`).
+3. *Build Command*: `prisma generate && prisma migrate deploy && next build` (o deja el default y ejecuta `npm run db:deploy` una vez desde tu máquina).
+4. Tras el primer deploy, corre `npm run db:seed` desde tu máquina apuntando al `.env` de producción.
+5. Cada `git push` a `main` redespliega. En el celular/tablet: abrir la URL → "Agregar a pantalla de inicio" (PWA).
+
+## Plan por fases (todas completadas)
+
+1. ✅ Fundación — proyecto, esquema completo, auth y roles, seed.
+2. ✅ Costeo — ingredientes con conversión y historial de precios, recetas, preparaciones.
+3. ✅ Empaques y costo real por canal.
+4. ✅ POS y caja — pedidos, congelamiento de costo, pagos divididos, cierre.
+5. ✅ Inventario conectado — descuento automático, compras, ajustes, lotes, alertas.
+6. ✅ Gastos, retiros, mermas, cortesías, incidencias.
+7. ✅ Reportes, dashboard, "¿por qué terminé en S/0?", punto de equilibrio, búsqueda y filtros.
+8. ✅ Pulido — auditoría con filtros, permisos por rol, PWA, páginas de error.
+
+## Lo que el negocio debe completar desde el sistema
+
+Ver la lista al final de [docs/REGLAS.md](docs/REGLAS.md): cantidades de receta pendientes, peso del slice de queso, unidades por bolsa de Petit Pan, ingredientes de salsa secreta / chicha / maracuyá, marca de cheddar predeterminada, servilletas y tenedores por pedido, y el stock inicial de cada insumo (Inventario → Ajustar → "Fijar en").

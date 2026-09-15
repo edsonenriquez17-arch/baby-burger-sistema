@@ -4,6 +4,7 @@ import { requerirPermiso } from "@/lib/auth/session";
 const SECCIONES = [
   { href: "/configuracion/usuarios", titulo: "Usuarios y permisos", desc: "Crear usuarios, roles y PIN", permiso: "usuarios.administrar" as const },
   { href: "/configuracion/general", titulo: "General", desc: "Margen objetivo, nombre del negocio, fondo de caja", permiso: "configuracion.editar" as const },
+  { href: "/configuracion/roles", titulo: "Permisos por rol", desc: "Qué puede hacer cada rol por defecto", permiso: "usuarios.administrar" as const },
   { href: "/configuracion/catalogos", titulo: "Catálogos", desc: "Categorías, marcas, proveedores, motivos, métodos de pago, mesas", permiso: "configuracion.editar" as const },
   { href: "/configuracion/auditoria", titulo: "Auditoría", desc: "Historial de acciones sensibles", permiso: "auditoria.ver" as const },
 ];
